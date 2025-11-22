@@ -9,6 +9,13 @@ export enum AppMode {
   MALAM = 'MALAM'
 }
 
+export enum Language {
+  INDONESIA = 'Indonesia',
+  INGGRIS = 'Inggris',
+  ARAB = 'Arab',
+  JEPANG = 'Jepang'
+}
+
 export interface TypingResult {
   wpm: number;
   errorRate: number;

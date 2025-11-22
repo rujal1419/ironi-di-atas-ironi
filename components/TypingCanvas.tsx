@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { TypingResult } from '../types';
+import { TypingResult, Language } from '../types';
 import { RefreshCw } from 'lucide-react';
 
 interface TypingCanvasProps {
@@ -8,13 +8,16 @@ interface TypingCanvasProps {
   onCharTyped: (char: string) => void; // For keyboard visual
   onTypingStart: () => void;
   isDark: boolean;
+  language: Language;
 }
 
-const TypingCanvas: React.FC<TypingCanvasProps> = ({ targetText, onComplete, onCharTyped, onTypingStart, isDark }) => {
+const TypingCanvas: React.FC<TypingCanvasProps> = ({ targetText, onComplete, onCharTyped, onTypingStart, isDark, language }) => {
   const [input, setInput] = useState('');
   const [startTime, setStartTime] = useState<number | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const isRTL = language === Language.ARAB;
 
   // Focus helper
   useEffect(() => {
@@ -89,10 +92,6 @@ const TypingCanvas: React.FC<TypingCanvasProps> = ({ targetText, onComplete, onC
     setInput('');
     setStartTime(null);
     inputRef.current?.focus();
-    // Note: We don't stop the timer explicitly here as we want to encourage restarting quickly, 
-    // but strictly the "session" hasn't started until they type again. 
-    // However, since App controls the timer via TypingStart, we leave it running or handle it in App if needed.
-    // For this specific request, we just reset the canvas state.
   };
 
   const renderTextOverlay = () => {
@@ -123,9 +122,9 @@ const TypingCanvas: React.FC<TypingCanvasProps> = ({ targetText, onComplete, onC
 
   return (
     <div 
-      // Reduced min-height and padding
       className="relative w-full min-h-[120px] flex flex-wrap content-start p-4 rounded-xl cursor-text border-2 transition-colors"
       onClick={() => inputRef.current?.focus()}
+      dir={isRTL ? 'rtl' : 'ltr'}
       style={{
         borderColor: isDark ? (inputRef.current === document.activeElement ? '#818cf8' : '#334155') : (inputRef.current === document.activeElement ? '#ea580c' : '#e5e7eb'),
         backgroundColor: isDark ? '#1e293b' : '#ffffff'
@@ -146,7 +145,7 @@ const TypingCanvas: React.FC<TypingCanvasProps> = ({ targetText, onComplete, onC
       />
 
       {/* Visual Overlay */}
-      <div className="w-full break-words whitespace-pre-wrap leading-relaxed">
+      <div className={`w-full break-words whitespace-pre-wrap leading-relaxed ${isRTL ? 'text-right' : 'text-left'}`}>
         {renderTextOverlay()}
       </div>
 

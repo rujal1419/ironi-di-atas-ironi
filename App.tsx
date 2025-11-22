@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sun, Moon, Keyboard, Award, Activity, MessageSquare, X, GraduationCap, Trash2, Check, ChevronRight } from 'lucide-react';
-import { AppMode, DifficultyLevel, LessonData, TypingResult } from './types';
-import { generateAdaptiveLesson, generateInitialLesson } from './services/geminiService';
+import { Sun, Moon, Keyboard, Activity, MessageSquare, X, GraduationCap, Trash2, Check, ChevronRight, Book } from 'lucide-react';
+import { AppMode, DifficultyLevel, LessonData, TypingResult, Language } from './types';
+import { generateAdaptiveLesson, generateInitialLesson, generateLessonForNewLanguage } from './services/geminiService';
 import VirtualKeyboard from './components/VirtualKeyboard';
 import TypingCanvas from './components/TypingCanvas';
 import StatsDisplay from './components/StatsDisplay';
@@ -10,7 +10,6 @@ import StudyTimer from './components/StudyTimer';
 const App: React.FC = () => {
   // State with Persistence
   const [mode, setMode] = useState<AppMode>(() => {
-    // Optional: could persist mode too, but defaulting to SIANG for now as per original
     return AppMode.SIANG;
   });
   
@@ -29,6 +28,8 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : {};
   });
 
+  const [language, setLanguage] = useState<Language>(Language.INDONESIA);
+
   const [lesson, setLesson] = useState<LessonData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -38,9 +39,11 @@ const App: React.FC = () => {
   const [isMessageOpen, setIsMessageOpen] = useState(false);
   const [hasUnreadMessage, setHasUnreadMessage] = useState(true);
   const [isLevelMenuOpen, setIsLevelMenuOpen] = useState(false);
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   
   const messagePopupRef = useRef<HTMLDivElement>(null);
   const levelMenuRef = useRef<HTMLDivElement>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
 
   // Derived Theme
   const isDark = mode === AppMode.MALAM;
@@ -64,9 +67,7 @@ const App: React.FC = () => {
       // If we have history, generate adaptive lesson immediately
       if (history.length > 0) {
         const lastResult = history[history.length - 1];
-        // We need a dummy target text if we are reloading, or we can just generate a generic start for the current level
-        // For simplicity on reload, we generate a new lesson based on the last result
-        const newLesson = await generateAdaptiveLesson(level, mode, lastResult, lastResult.actualTypedText); // Using actual text as context
+        const newLesson = await generateAdaptiveLesson(level, mode, lastResult, lastResult.actualTypedText, language);
         setLesson(newLesson);
       } else {
         const initialLesson = await generateInitialLesson();
@@ -97,6 +98,9 @@ const App: React.FC = () => {
       if (levelMenuRef.current && !levelMenuRef.current.contains(event.target as Node)) {
         setIsLevelMenuOpen(false);
       }
+      if (langMenuRef.current && !langMenuRef.current.contains(event.target as Node)) {
+        setIsLangMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -114,7 +118,6 @@ const App: React.FC = () => {
       localStorage.removeItem('app_history');
       localStorage.removeItem('app_key_mastery');
       localStorage.removeItem('study_timer_elapsed');
-      // We keep timer target settings generally, but clear progress
       
       setLevel(DifficultyLevel.PEMULA);
       setHistory([]);
@@ -129,6 +132,7 @@ const App: React.FC = () => {
     if (isMessageOpen) setIsMessageOpen(false);
     setHasUnreadMessage(false);
     setIsLevelMenuOpen(false);
+    setIsLangMenuOpen(false);
   };
 
   // Update Key Mastery Score
@@ -138,15 +142,13 @@ const App: React.FC = () => {
 
     for (let i = 0; i < length; i++) {
       const char = target[i].toLowerCase();
-      if (!/[a-z0-9]/.test(char)) continue; // Skip special chars for basic mastery for now
+      if (!/[a-z0-9]/.test(char)) continue; 
 
       const currentScore = newMastery[char] || 0;
       
       if (target[i] === typed[i]) {
-        // Correct: Small increment
         newMastery[char] = Math.min(100, currentScore + 2);
       } else {
-        // Incorrect: Larger decrement
         newMastery[char] = Math.max(0, currentScore - 5);
       }
     }
@@ -170,7 +172,8 @@ const App: React.FC = () => {
         level,
         mode,
         result,
-        lesson.lessonText
+        lesson.lessonText,
+        language
       );
       
       setLevel(nextLessonData.nextLevel);
@@ -180,6 +183,24 @@ const App: React.FC = () => {
       setIsMessageOpen(true);
     }
     
+    setIsLoading(false);
+  };
+
+  const handleLanguageChange = async (newLang: Language) => {
+    if (newLang === language) {
+      setIsLangMenuOpen(false);
+      return;
+    }
+    setLanguage(newLang);
+    setIsLangMenuOpen(false);
+    setIsLoading(true);
+    
+    // Generate new start lesson for this language
+    const newLesson = await generateLessonForNewLanguage(level, mode, newLang);
+    setLesson(newLesson);
+    
+    setHasUnreadMessage(true);
+    setIsMessageOpen(true);
     setIsLoading(false);
   };
 
@@ -255,6 +276,47 @@ const App: React.FC = () => {
                </span>
             </div>
 
+            {/* Language Menu (Next to Message) */}
+            <div className="relative" ref={langMenuRef}>
+              <button
+                onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+                className={`p-2 rounded-full transition-all duration-200 ${
+                  isLangMenuOpen 
+                    ? (isDark ? 'bg-slate-700 text-white' : 'bg-blue-100 text-blue-600')
+                    : (isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-gray-100 text-gray-500')
+                }`}
+                title="Pilih Bahasa"
+              >
+                <Book size={20} />
+              </button>
+
+              {isLangMenuOpen && (
+                <div className={`absolute top-full right-0 mt-2 w-48 rounded-xl shadow-xl border overflow-hidden z-50 ${
+                  isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100'
+                }`}>
+                   <div className="p-2 border-b border-opacity-10">
+                     <span className="text-[10px] font-bold opacity-50 uppercase tracking-wider px-2">Bahasa Latihan</span>
+                  </div>
+                  <div className="p-1">
+                    {Object.values(Language).map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => handleLanguageChange(lang)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                          language === lang
+                            ? (isDark ? 'bg-night-primary/20 text-night-primary' : 'bg-day-primary/10 text-day-primary')
+                            : (isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-100')
+                        }`}
+                      >
+                        <span>{lang}</span>
+                        {language === lang && <Check size={14} />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Message Icon */}
             <div className="relative" ref={messagePopupRef}>
               <button 
@@ -327,7 +389,7 @@ const App: React.FC = () => {
             
             <section className="space-y-2">
                <div className="flex justify-between items-end px-1">
-                  <h3 className="font-bold text-sm opacity-75">Latihan Anda</h3>
+                  <h3 className="font-bold text-sm opacity-75">Latihan Anda ({language})</h3>
                   {isLoading && <span className="text-[10px] animate-pulse text-day-primary">Sedang menyiapkan materi baru...</span>}
                </div>
                
@@ -338,6 +400,7 @@ const App: React.FC = () => {
                    onCharTyped={handleCharTyped}
                    onTypingStart={handleTypingStart}
                    isDark={isDark}
+                   language={language}
                  />
                )}
                
@@ -355,6 +418,7 @@ const App: React.FC = () => {
                   criticalKeys={lesson?.criticalKeys || []} 
                   keyMastery={keyMastery}
                   isDark={isDark}
+                  language={language}
                />
             </section>
           </div>
