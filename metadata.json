@@ -1,0 +1,5 @@
+{
+  "name": "Guru Ketik Adaptif Gemini",
+  "description": "A smart, adaptive 10-finger typing tutor powered by Gemini that adjusts difficulty based on your performance and provides personalized feedback.",
+  "requestFramePermissions": []
+}
